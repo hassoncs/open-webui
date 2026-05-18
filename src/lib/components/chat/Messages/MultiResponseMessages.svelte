@@ -23,12 +23,38 @@
 	const i18n = getContext('i18n');
 	dayjs.extend(localizedFormat);
 
-	export let chatId;
-	export let history;
-	export let messageId;
-	export let selectedModels = [];
+	interface Message {
+		id: string;
+		parentId: string | null;
+		childrenIds: string[];
+		content?: string;
+		done?: boolean;
+		model?: string;
+		modelIdx?: number;
+		models?: string[];
+		timestamp?: number;
+		merged?: {
+			status?: boolean;
+			content?: string;
+			timestamp?: number;
+		};
+	}
 
-	export let isLastMessage;
+	interface History {
+		messages: Record<string, Message>;
+		currentId?: string;
+	}
+
+	interface GroupedMessageIdsEntry {
+		messageIds: string[];
+	}
+
+	export let chatId = '';
+	export let history: History;
+	export let messageId = '';
+	export let selectedModels: string[] = [];
+
+	export let isLastMessage = false;
 	export let readOnly = false;
 	export let editCodeBlock = true;
 
@@ -54,10 +80,10 @@
 
 	const dispatch = createEventDispatcher();
 
-	let currentMessageId;
-	let parentMessage;
-	let groupedMessageIds = {};
-	let groupedMessageIdsIdx = {};
+	let currentMessageId = '';
+	let parentMessage: Message | null = null;
+	let groupedMessageIds: Record<number, GroupedMessageIdsEntry> = {};
+	let groupedMessageIdsIdx: Record<number, number> = {};
 
 	let selectedModelIdx = null;
 
@@ -204,7 +230,7 @@
 	};
 
 	const onGroupClick = async (_messageId, modelIdx) => {
-		if (messageId != _messageId) {
+		if (messageId !== _messageId) {
 			let currentMessageId = _messageId;
 			let messageChildrenIds = history.messages[currentMessageId].childrenIds;
 			while (messageChildrenIds.length !== 0) {
@@ -228,6 +254,20 @@
 			return history.messages[messageId].content;
 		});
 		mergeResponses(messageId, responses, chatId);
+	};
+
+	const handleRegenerateResponse = async (modelIdx, message, prompt = null) => {
+		await regenerateResponse(message, prompt);
+		await tick();
+		groupedMessageIdsIdx[modelIdx] = groupedMessageIds[modelIdx].messageIds.length - 1;
+	};
+
+	const handleSelectedModelRegenerateResponse = async (message, prompt = null) => {
+		if (selectedModelIdx === null) {
+			return;
+		}
+
+		await handleRegenerateResponse(selectedModelIdx, message, prompt);
 	};
 
 	onMount(async () => {
@@ -313,12 +353,7 @@
 									{actionMessage}
 									{submitMessage}
 									{continueResponse}
-									regenerateResponse={async (message, prompt = null) => {
-										regenerateResponse(message, prompt);
-										await tick();
-										groupedMessageIdsIdx[selectedModelIdx] =
-											groupedMessageIds[selectedModelIdx].messageIds.length - 1;
-									}}
+									regenerateResponse={handleSelectedModelRegenerateResponse}
 									{addMessages}
 									{readOnly}
 									{topPadding}
@@ -369,12 +404,8 @@
 										{actionMessage}
 										{submitMessage}
 										{continueResponse}
-										regenerateResponse={async (message, prompt = null) => {
-											regenerateResponse(message, prompt);
-											await tick();
-											groupedMessageIdsIdx[modelIdx] =
-												groupedMessageIds[modelIdx].messageIds.length - 1;
-										}}
+										regenerateResponse={(message, prompt = null) =>
+											handleRegenerateResponse(modelIdx, message, prompt)}
 										{addMessages}
 										{readOnly}
 										{editCodeBlock}
