@@ -116,7 +116,7 @@ from open_webui.utils.code_interpreter import execute_code_jupyter
 from open_webui.utils.payload import apply_system_prompt_to_body
 from open_webui.utils.response import normalize_usage
 from open_webui.utils.mcp.client import MCPClient
-from open_webui.utils.tool_output import build_function_call_output_item
+from open_webui.utils.tool_output import build_function_call_output_item, update_function_call_status
 
 
 from open_webui.config import (
@@ -4655,16 +4655,17 @@ async def streaming_chat_response_handler(response, ctx):
                             }
                         )
 
+                    result_map = {result.get('tool_call_id', ''): result for result in results}
+
                     # Update function_call statuses and append function_call_output items
                     for tc in response_tool_calls:
                         call_id = tc.get('id', '')
-                        # Mark function_call as completed
-                        for item in output:
-                            if item.get('type') == 'function_call' and item.get('call_id') == call_id:
-                                item['status'] = 'completed'
-                                # Update arguments with parsed/sanitized version
-                                item['arguments'] = tc.get('function', {}).get('arguments', '{}')
-                                break
+                        update_function_call_status(
+                            output,
+                            call_id=call_id,
+                            arguments=tc.get('function', {}).get('arguments', '{}'),
+                            failed=bool(result_map.get(call_id, {}).get('error')),
+                        )
 
                     for result in results:
                         output_parts = [{'type': 'input_text', 'text': result.get('content', '')}]

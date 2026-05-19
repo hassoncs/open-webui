@@ -38,3 +38,59 @@ def test_build_function_call_output_item_preserves_success_metadata(tool_output_
     assert item['status'] == 'completed'
     assert item['files'] == [{'type': 'image', 'url': 'https://example.com/x.png'}]
     assert item['embeds'] == {'score': 0.9}
+
+
+def test_repair_output_items_normalizes_legacy_mcp_error_and_marks_pair_failed(tool_output_module):
+    output = [
+        {
+            'type': 'function_call',
+            'id': 'fc_1',
+            'call_id': 'call_1',
+            'name': 'ntn_notion-create-pages',
+            'arguments': '{}',
+            'status': 'completed',
+        },
+        {
+            'type': 'function_call_output',
+            'id': 'fco_1',
+            'call_id': 'call_1',
+            'status': 'completed',
+            'output': [
+                {
+                    'type': 'input_text',
+                    'text': "[{'type': 'text', 'text': 'MCP error -32602: Invalid input', 'annotations': None, 'meta': None}]",
+                }
+            ],
+        },
+    ]
+
+    repaired, changed = tool_output_module.repair_output_items(output)
+
+    assert changed is True
+    assert repaired[0]['status'] == 'failed'
+    assert repaired[1]['status'] == 'failed'
+    assert repaired[1]['output'][0]['text'] == 'MCP error -32602: Invalid input'
+
+
+def test_update_function_call_status_marks_failed_pair(tool_output_module):
+    output = [
+        {
+            'type': 'function_call',
+            'id': 'fc_2',
+            'call_id': 'call_2',
+            'name': 'tool',
+            'arguments': '{}',
+            'status': 'in_progress',
+        }
+    ]
+
+    changed = tool_output_module.update_function_call_status(
+        output,
+        call_id='call_2',
+        arguments='{"foo":"bar"}',
+        failed=True,
+    )
+
+    assert changed is True
+    assert output[0]['status'] == 'failed'
+    assert output[0]['arguments'] == '{"foo":"bar"}'
