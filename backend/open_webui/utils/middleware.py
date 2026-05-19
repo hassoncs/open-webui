@@ -116,6 +116,7 @@ from open_webui.utils.code_interpreter import execute_code_jupyter
 from open_webui.utils.payload import apply_system_prompt_to_body
 from open_webui.utils.response import normalize_usage
 from open_webui.utils.mcp.client import MCPClient
+from open_webui.utils.tool_output import build_function_call_output_item
 
 
 from open_webui.config import (
@@ -4558,6 +4559,7 @@ async def streaming_chat_response_handler(response, ctx):
                         tool = None
                         tool_type = None
                         direct_tool = False
+                        tool_failed = False
 
                         if tool_function_name in tools:
                             tool = tools[tool_function_name]
@@ -4599,6 +4601,7 @@ async def streaming_chat_response_handler(response, ctx):
                                     tool_result = await tool_function(**tool_function_params)
 
                             except Exception as e:
+                                tool_failed = True
                                 tool_result = str(e)
 
                         tool_result, tool_result_files, tool_result_embeds = await process_tool_result(
@@ -4646,6 +4649,7 @@ async def streaming_chat_response_handler(response, ctx):
                             {
                                 'tool_call_id': tool_call_id,
                                 'content': str(tool_result) if tool_result else '',
+                                'error': tool_failed,
                                 **({'files': tool_result_files} if tool_result_files else {}),
                                 **({'embeds': tool_result_embeds} if tool_result_embeds else {}),
                             }
@@ -4677,15 +4681,14 @@ async def streaming_chat_response_handler(response, ctx):
                                 display_files.append(file_item)
 
                         output.append(
-                            {
-                                'type': 'function_call_output',
-                                'id': output_id('fco'),
-                                'call_id': result.get('tool_call_id', ''),
-                                'output': output_parts,
-                                'status': 'completed',
-                                **({'files': display_files} if display_files else {}),
-                                **({'embeds': result.get('embeds')} if result.get('embeds') else {}),
-                            }
+                            build_function_call_output_item(
+                                item_id=output_id('fco'),
+                                call_id=result.get('tool_call_id', ''),
+                                output_parts=output_parts,
+                                display_files=display_files,
+                                embeds=result.get('embeds'),
+                                error=result.get('error', False),
+                            )
                         )
 
                     # Append a new empty message item for the next response

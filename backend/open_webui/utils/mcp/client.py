@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from typing import Optional
 from contextlib import AsyncExitStack
@@ -110,9 +111,25 @@ class MCPClient:
         result_content = result_dict.get('content', {})
 
         if result.isError:
-            raise Exception(result_content)
+            raise Exception(self._content_to_text(result_content))
         else:
             return result_content
+
+    @staticmethod
+    def _content_to_text(content) -> str:
+        if isinstance(content, str):
+            return content
+
+        if isinstance(content, list):
+            texts = []
+            for part in content:
+                if isinstance(part, dict) and part.get('type') == 'text' and part.get('text'):
+                    texts.append(part['text'])
+
+            if texts:
+                return '\n'.join(texts)
+
+        return json.dumps(content, ensure_ascii=False)
 
     async def list_resources(self, cursor: Optional[str] = None) -> Optional[dict]:
         if not self.session:
