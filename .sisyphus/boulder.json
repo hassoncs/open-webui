@@ -1,0 +1,32 @@
+{
+  "active_plan": "/Users/hassoncs/src/ch5/open-webui/.sisyphus/plans/open-webui-generated-file-access.md",
+  "started_at": "2026-05-19T01:11:03.058Z",
+  "session_ids": [
+    "ses_1c236b63fffevrfB7R79DsQ0BR",
+    "ses_1c23611c5ffetRXQN2ljpbXSo6",
+    "ses_1c236110bffeC4Rhu64mS0HVM7",
+    "ses_1c235a35affex04mFI8hPPrJtE",
+    "ses_1c235b6f7ffeUoxM2LVzvc5iRX",
+    "ses_1c2358efbffeAEVvXnKXoPWFEG",
+    "ses_1c235993effe7bNvRWWTGXuSLU",
+    "ses_1c236115affeamTNfcQPqbKLnJ",
+    "ses_1c235abcaffeMPv3EGRQ8grOEB",
+    "ses_1c232c5afffeTzSOdzJQA6V1qt",
+    "ses_1c2237c03ffeVPrjXH9bdob5du",
+    "ses_1c1fdf086ffe7m3rv06i4YfOvj",
+    "ses_1c1fdf336ffeGoZnX3AcNI97o3",
+    "ses_1c1eef457ffeWq2OH10R2yUQ3i",
+    "ses_1c1b98f16ffeHz52DCPu0m0fl1",
+    "ses_1c1b98c45ffeSjWWtAjICyaScC",
+    "ses_1c1b98bb0ffekY9lSYD9QOWgz7",
+    "ses_1c154e61cffe3FvKNKHiiA0FWI",
+    "ses_1c138776cffezHWsCXK7y9pKoP",
+    "ses_1c10f8e9effegG2EzZbFZ9TLoR",
+    "ses_1c10e4c53ffe3pfx3YIKtoLq6O",
+    "ses_1c10f8e6dffeS2gmtYrvbAXYh2",
+    "ses_1c10f8f3bffeVyAptzOPV8ZeAa"
+  ],
+  "plan_name": "open-webui-generated-file-access",
+  "agent": "atlas",
+  "worktree_path": "/Users/hassoncs/src/ch5/open-webui-generated-file-access"
+}

@@ -34,6 +34,15 @@
 - Public proof should show `https://chat.ch5.me` returning `200`.
 - Host proof should show tunnel `com.radbot.open-webui-cloudflared` loaded and `open-webui-devmux` healthy.
 
+## Open WebUI Session IDs <!-- oc:id=sec_openwebui_sessions -->
+
+- UUID-looking chat/session IDs from this repo usually mean Open WebUI chats, not OpenCode sessions.
+- For session lookup, first use the live Open WebUI SQLite DB: container `open-webui-devmux`, DB path `/app/backend/data/webui.db`.
+- Fetch a safe snapshot with `scripts/fetch_open_webui_db_snapshot.py --output /tmp/openwebui.sqlite3` before inspecting data.
+- Dump a conversation with `scripts/open_webui_session_debug.py --db /tmp/openwebui.sqlite3 dump-session --chat-id <uuid>`.
+- Analyze or repair malformed chat history with `scripts/repair_open_webui_session.py --db <sqlite> --chat-id <uuid>`; add `--apply` only after snapshot proof.
+- Common corruption: embedded `chat.chat.history.messages` nodes can lose `id`, `role`, `parentId`, or `childrenIds` even when `chat_message` rows are intact. Repair from `chat_message` before deleting chats.
+
 ## Cloudflare Notes <!-- oc:id=sec_5b3252 -->
 
 - Prefer the Cloudflare Tunnel path over local TLS termination.

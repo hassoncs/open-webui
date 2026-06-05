@@ -269,6 +269,121 @@ class ChatTable:
         """Recursively remove null bytes from strings in dict/list structures."""
         return sanitize_data_for_db(obj)
 
+    @staticmethod
+    def _is_history_message_valid(message_id: str, message: dict | None) -> bool:
+        if not isinstance(message, dict):
+            return False
+        if message.get('id') != message_id:
+            return False
+        if not message.get('role'):
+            return False
+
+        parent_id = message.get('parentId')
+        if parent_id is not None and not isinstance(parent_id, str):
+            return False
+
+        children_ids = message.get('childrenIds')
+        if children_ids is not None and not isinstance(children_ids, list):
+            return False
+
+        return True
+
+    @staticmethod
+    def _select_history_current_id(messages: dict[str, dict], preferred_id: str | None) -> str | None:
+        if preferred_id and preferred_id in messages:
+            return preferred_id
+
+        leaf_candidates = []
+        for message_id, message in messages.items():
+            children = message.get('childrenIds') or []
+            if len(children) == 0:
+                leaf_candidates.append((message.get('timestamp') or 0, message_id))
+
+        if leaf_candidates:
+            leaf_candidates.sort()
+            return leaf_candidates[-1][1]
+
+        return next(iter(messages), None)
+
+    @staticmethod
+    def _history_messages_equal(left: dict[str, dict], right: dict[str, dict]) -> bool:
+        return left == right
+
+    async def _repair_chat_row(self, chat_item, db: AsyncSession) -> bool:
+        changed = self._sanitize_chat_row(chat_item)
+
+        chat_data = chat_item.chat
+        if not isinstance(chat_data, dict):
+            return changed
+
+        history = chat_data.get('history')
+        if not isinstance(history, dict):
+            return changed
+
+        messages = history.get('messages')
+        if not isinstance(messages, dict):
+            return changed
+
+        invalid_message_ids = {
+            message_id
+            for message_id, message in messages.items()
+            if not self._is_history_message_valid(message_id, message)
+        }
+
+        normalized_messages = await ChatMessages.get_messages_map_by_chat_id(chat_item.id, db=db)
+        repaired_messages = messages
+
+        if normalized_messages is not None:
+            unresolved_ids = self.get_unresolved_parent_ids(normalized_messages)
+            missing_messages = {
+                message_id: messages[message_id]
+                for message_id in unresolved_ids
+                if message_id in messages and self._is_history_message_valid(message_id, messages[message_id])
+            }
+            if missing_messages:
+                normalized_messages.update(missing_messages)
+                await self.backfill_messages_by_chat_id(chat_item.id, chat_item.user_id, missing_messages)
+
+            if invalid_message_ids:
+                repaired_messages = {**messages, **normalized_messages}
+            elif unresolved_ids:
+                repaired_messages = normalized_messages
+
+        for message_id, message in list(repaired_messages.items()):
+            if not isinstance(message, dict):
+                continue
+            message.setdefault('id', message_id)
+            children = message.get('childrenIds')
+            if not isinstance(children, list):
+                message['childrenIds'] = []
+                changed = True
+            else:
+                filtered_children = [child_id for child_id in children if child_id in repaired_messages]
+                if filtered_children != children:
+                    message['childrenIds'] = filtered_children
+                    changed = True
+
+        preferred_current_id = history.get('currentId')
+        current_message = repaired_messages.get(preferred_current_id) if preferred_current_id else None
+        if preferred_current_id and not self._is_history_message_valid(preferred_current_id, current_message):
+            preferred_current_id = None
+            changed = True
+
+        selected_current_id = self._select_history_current_id(repaired_messages, preferred_current_id)
+        if history.get('currentId') != selected_current_id:
+            history['currentId'] = selected_current_id
+            changed = True
+
+        if not self._history_messages_equal(repaired_messages, messages):
+            history['messages'] = repaired_messages
+            changed = True
+
+        if changed:
+            chat_data['history'] = history
+            chat_item.chat = chat_data
+
+        return changed
+
     def _sanitize_chat_row(self, chat_item):
         """
         Clean a Chat SQLAlchemy model's title + chat JSON,
@@ -921,7 +1036,7 @@ class ChatTable:
                 if chat_item is None:
                     return None
 
-                if self._sanitize_chat_row(chat_item):
+                if await self._repair_chat_row(chat_item, db):
                     await db.commit()
                     await db.refresh(chat_item)
 
@@ -956,8 +1071,15 @@ class ChatTable:
         try:
             async with get_async_db_context(db) as db:
                 result = await db.execute(select(Chat).filter_by(id=id, user_id=user_id))
-                chat = result.scalars().first()
-                return ChatModel.model_validate(chat) if chat else None
+                chat_item = result.scalars().first()
+                if chat_item is None:
+                    return None
+
+                if await self._repair_chat_row(chat_item, db):
+                    await db.commit()
+                    await db.refresh(chat_item)
+
+                return ChatModel.model_validate(chat_item)
         except Exception:
             return None
 
